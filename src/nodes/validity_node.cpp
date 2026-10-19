@@ -70,6 +70,7 @@ class ValidityNode : public rclcpp::Node {
     // Drawing costs a validity lookup per edge, so it is throttled well
     // below the prediction rate -- the display only has to be readable.
     m_markerPeriod = declare_parameter("marker_period_s", 0.2);
+    m_reportPeriod = declare_parameter("report_period_s", 5.0);
     m_markerPub = create_publisher<visualization_msgs::msg::MarkerArray>(
         "~/markers", 1);
 
@@ -120,6 +121,7 @@ class ValidityNode : public rclcpp::Node {
     if (m_currentPath.empty() ||
         m_replanner->PathBlocked(m_currentPath, isValid)) {
       m_currentPath = m_replanner->Plan(m_startVid, m_goalVid, isValid);
+      ++m_replans;
       if (m_currentPath.empty())
         RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
                              "no valid path from %zu to %zu", m_startVid,
@@ -148,6 +150,40 @@ class ValidityNode : public rclcpp::Node {
       m_lastMarkers = now;
       PublishMarkers(path.header.stamp);
     }
+    ++m_updates;
+    ReportIfDue();
+  }
+
+  /// Periodic one-line summary -- the preliminary numbers for this half
+  /// of the pipeline. The update rate is the one to compare against the
+  /// camera rate: certification is the expensive stage, and if it runs
+  /// well below the sensor it is the bottleneck. The obb/tree split says
+  /// which part of certification the time is going to.
+  void ReportIfDue() {
+    const auto now = this->now();
+    if (m_lastReport.nanoseconds() == 0) { m_lastReport = now; return; }
+    const double elapsed = (now - m_lastReport).seconds();
+    if (elapsed < m_reportPeriod) return;
+
+    using V = spite_d::ValidityServer::Validity;
+    size_t red = 0, gray = 0;
+    for (const auto& e : m_graph.edges) {
+      const auto v = m_server->GetEdgeValidity(e.src, e.tgt);
+      if (v == V::INVALID) ++red;
+      else if (v == V::UNKNOWN) ++gray;
+    }
+
+    const auto& t = m_server->GetTimings();
+    const double n = t.passes ? double(t.passes) : 1.0;
+    RCLCPP_INFO(get_logger(),
+                "validity | %.1f Hz | certify %.1f ms (obb %.2f / tree %.1f) "
+                "| edges red %zu gray %zu of %zu | replans %zu",
+                m_updates / elapsed, t.TotalMs() / n, t.obbFitMs / n,
+                t.treeMs / n, red, gray, m_graph.edges.size(), m_replans);
+
+    m_lastReport = now;
+    m_updates = 0;
+    m_server->ResetTimings();
   }
 
   /// Roadmap edges coloured by certification, plus the active path.
@@ -227,6 +263,10 @@ class ValidityNode : public rclcpp::Node {
   size_t m_maxDrawnEdges{4000};
   double m_markerPeriod{0.2};
   rclcpp::Time m_lastMarkers{0, 0, RCL_ROS_TIME};
+
+  double m_reportPeriod{5.0};
+  rclcpp::Time m_lastReport{0, 0, RCL_ROS_TIME};
+  size_t m_updates{0}, m_replans{0};
 
   rclcpp::Subscription<spite_d::msg::PredictedTrajectoryArray>::SharedPtr m_sub;
   rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr m_pathPub;

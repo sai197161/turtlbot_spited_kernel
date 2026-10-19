@@ -117,6 +117,39 @@ Then walk through the space in front of the robot.
 
 ---
 
+## The numbers it prints
+
+Both nodes print a summary line every 5 seconds. **These are the
+preliminary results** — the main thing to copy out of the terminal and
+send back.
+
+```
+[perception_node] perception | 14.8 Hz | detect 2.3 ms | tracks now 1 | distinct ids in 5s: 4
+[validity_node]   validity | 1.2 Hz | certify 240.1 ms (obb 0.08 / tree 240.0) | edges red 412 gray 1877 of 13675 | replans 3
+```
+
+Reading them:
+
+- **Hz** — how fast each stage is keeping up. Compare against the camera
+  rate (`ros2 topic hz` on the depth topic). Perception should roughly
+  match it; certification is the expensive stage and is expected to be
+  slower. How much slower is exactly what we want to find out.
+- **detect ms** — time to turn one depth image into tracked boxes.
+- **distinct ids in 5s** — if one person is walking and this says 4, the
+  tracker is losing and re-acquiring them. A known weakness; the number
+  tells us how bad it is on real data.
+- **certify ms (obb / tree)** — time to recertify the roadmap, split
+  between building the obstacle's geometry and querying the roadmap. In
+  simulation the tree query is essentially all of it; worth confirming.
+- **edges red / gray** — how much of the roadmap the obstacle blocks.
+  Red means provably blocked, gray means undecided. If nearly everything
+  goes red with one person in the room, something is over-inflating.
+- **replans** — how often the path changed.
+
+Change the interval with `report_period_s:=2.0` if 5 s is too coarse.
+
+---
+
 ## Checking it stage by stage
 
 If something looks wrong, this narrows down *where*. Run each in a new
@@ -193,14 +226,16 @@ roughly what fraction of edges go red and we'll look at it.
 Even a failure is a good result here — this is the first time any of it
 has seen real hardware.
 
-1. A rosbag, if you can — this is the single most valuable thing, because
-   it lets everything be replayed offline without the robot:
+1. **The summary lines** from both terminals — a minute or two of them is
+   enough. This is the actual result.
+2. A rosbag, if you can — the next most valuable thing, because it lets
+   everything be replayed offline without the robot:
    ```bash
    ros2 bag record /camera/depth/image_raw /camera/depth/camera_info \
                    /spite_d_perception/obstacles \
                    /spite_d_prediction/predictions \
                    /spite_d_validity/path
    ```
-2. A screen recording of RViz, or just a photo of it
-3. The terminal output from all three nodes
-4. Roughly what you did — where you stood, how you walked, how far away
+3. A screen recording of RViz, or just a photo of it
+4. Roughly what you did — where you stood, how you walked, how far away,
+   how many people were in view
