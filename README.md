@@ -1,6 +1,6 @@
 # SPITE-D on a TurtleBot
 
-A stripped-down build of my SPITE-D research package for a first go on real hardware
+A stripped-down build of my SPITE-D research package for a first test real hardware
 
 
 ## What this kernel tests
@@ -26,15 +26,11 @@ source /opt/ros/jazzy/setup.bash
 colcon build && source install/setup.bash
 ```
 
-First build takes a few minutes — there's a geometry library compiled
-from source alongside it. If it says open-spite is missing, the
+First build takes a few minutes. If it says open-spite is missing, the
 `--recursive` didn't take:
 `cd src/turtlbot_spited_kernel && git submodule update --init --recursive`
 
-**Fair warning:** this has never actually been compiled on a robot. I
-developed it on a machine with no ROS, and the Linux box I normally
-build on is down right now. So the build failing is very possible.
-If it does, please send me the error! although I'm super busy with school so not sure when I'll 
+I developed it on a machine with no ROS, and tpikachu is down right now. So if the build fails, please send me the error! although I'm super busy with school so not sure when I'll 
 get around to everything...
 
 **2. Check it even starts,** 
@@ -59,14 +55,12 @@ hardware issue.
 If it goes wrong here:
 
 - *`Package 'spite_d' not found`* — workspace isn't sourced in that
-  terminal. `source ~/spited_ws/install/setup.bash`. Every terminal,
-  annoyingly.
+  terminal. `source ~/spited_ws/install/setup.bash`. Every terminal!
 - *`error while loading shared libraries`* — build installed the nodes
-  but not their libraries. That's my bug, send me the message.
+  but not their libraries. send me the message!
 - *`cannot read roadmap graph`* — the bundled roadmap didn't install.
   Also my bug.
-- *Crashes, or prints nothing at all* — honestly the most useful thing
-  you could send me. Paste the whole terminal.
+- *Crashes, or prints nothing at all* — please paste the whole terminal.
 
 **3. Find your depth topic.** Varies by camera and driver:
 
@@ -112,13 +106,11 @@ ros2 launch spite_d turtlebot_demo.launch.py \
 ```
 
 Try to walk roughly the same way for roughly the same amount of time. A
-minute or two each is plenty. It's the *pair* of runs that's the result
-— either one on its own doesn't say much.
+minute or two?
 
 ## How to read the results
 
-Both nodes print a summary line every 5 seconds. **Those lines are the
-result**, and what I would like back.
+Both nodes print a summary line every 5 seconds. please send those!!
 
 ```
 perception | 14.8 Hz | detect 2.3 ms | tracks now 1 | distinct ids in 5s: 4
