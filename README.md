@@ -83,14 +83,57 @@ source alongside it. If it complains that open-spite is missing, the
 
 A roadmap ships with the package, so there is nothing to generate.
 
-**2. Find your depth topic.** These differ by camera and driver:
+**Heads up:** this package has not been compiled on a robot yet — it was
+developed on a machine with no ROS, and the Linux box it normally builds
+on is offline. A first build failing is a plausible outcome. If it does,
+**send me the error rather than working around it** — it is far more
+likely to be something I got wrong than something you need to fix, and
+patching locally would put your copy out of sync with the package.
+
+**2. Check it starts, before involving the robot.** This needs no
+camera, no depth topic and no driving — it only proves the build is
+sound and the roadmap loads:
+
+```bash
+ros2 run spite_d validity_node --ros-args \
+  -p roadmap_graph:="$(ros2 pkg prefix spite_d)/share/spite_d/demo_roadmap/roadmap_graph.txt" \
+  -p roadmap_geoms:="$(ros2 pkg prefix spite_d)/share/spite_d/demo_roadmap/roadmap_geoms.txt"
+```
+
+Expected: two log lines, then silence.
+
+```
+[INFO] [spite_d_validity]: certification mode: SPANS (amortised)
+[INFO] [spite_d_validity]: roadmap loaded: 1373 vertices, 13675 edges; planning 0 -> 1
+```
+
+Then it sits there, idle, because nothing is publishing obstacles. Ctrl-C
+out. If you see those two lines, the build, the install paths and the
+parameters are all fine, and anything that goes wrong later is a
+perception or hardware problem rather than a broken package — which is
+the distinction worth having before you start chasing a detector that
+will not fire.
+
+Failures here, and what they mean:
+
+- *`Package 'spite_d' not found`* — the workspace is not sourced in this
+  terminal. `source ~/spited_ws/install/setup.bash`, in every terminal.
+- *`error while loading shared libraries`* — the build installed the
+  nodes but not their libraries. A package bug; send me the exact
+  message.
+- *`cannot read roadmap graph`* — the bundled roadmap did not get
+  installed. Also a package bug.
+- *Crash, or no output at all* — the most useful failure to report.
+  Send the whole terminal.
+
+**3. Find your depth topic.** These differ by camera and driver:
 
 ```bash
 ros2 topic list | grep -i depth
 ros2 topic hz /camera/depth/image_raw      # confirm it is publishing
 ```
 
-**3. Park the robot.** The bundled roadmap covers a 4 m × 4 m area and
+**4. Park the robot.** The bundled roadmap covers a 4 m × 4 m area and
 assumes the camera sits at one edge looking across it:
 
 ```
@@ -105,7 +148,7 @@ So put it at one side of roughly 4 m of clear floor, facing across. If
 you put it somewhere else, pass `camera_x`, `camera_y`, `camera_z`
 (height off the floor) and `camera_yaw` (0 when facing +x) to match.
 
-**4. Launch.**
+**5. Launch the whole thing.**
 
 ```bash
 ros2 launch spite_d turtlebot_demo.launch.py \
@@ -116,7 +159,7 @@ ros2 launch spite_d turtlebot_demo.launch.py \
 RViz opens showing tracked obstacles, the roadmap, and the planned path.
 Then walk through the space in front of the robot.
 
-**5. Then run it again with spans off.** Same thing, plus
+**6. Then run it again with spans off.** Same thing, plus
 `use_spans:=false`:
 
 ```bash
@@ -206,5 +249,7 @@ touched real hardware.
    noticeably different walks, say so; it affects how comparable the
    numbers are.
 
-If something does not work, the node terminals plus which of the four
-stages went quiet is usually enough to pin it down.
+If something does not work, the node terminals plus which stage went
+quiet is usually enough to pin it down. If step 2 above never printed its
+two lines, stop there and send that — nothing downstream will mean
+anything until the package builds and starts.
