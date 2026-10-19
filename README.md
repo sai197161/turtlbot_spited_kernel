@@ -23,7 +23,7 @@ instead of recomputing from scratch every frame.
 ## What this kernel tests
 
 Whether the pipeline survives real-time data from real hardware, and
-what it costs. Four stages run live:
+what it costs. The whole chain runs live:
 
 ```
 depth image -> detect + track -> predict -> certify roadmap edges -> replan
@@ -37,14 +37,29 @@ The open questions, none of which have been answered outside simulation:
 - Does certification produce sensible labels from real, noisy obstacle
   boxes?
 - Can each stage keep up with the camera, and where does the time go?
+- **Do spans actually hold up on real motion?** A span is only useful
+  while the person keeps matching the prediction it froze. In
+  simulation people walk in straight lines; real ones do not. How often
+  a span survives on real tracking data is the number this is for.
+
+That last one is the research contribution, and it is a switch:
+
+```
+use_spans:=true    spans: recertify only when the prediction breaks
+use_spans:=false   baseline: recertify everything, every frame
+```
+
+Running the same walk both ways is the measurement — same room, same
+camera, same roadmap, only the certification strategy differs. Please
+do both if you have time; see "How to run" below.
 
 **Not** in scope here, deliberately:
 
-- **Spans are not exercised.** This runs the every-frame baseline that
-  spans are meant to replace. The baseline numbers come first, so there
-  is something to compare against later.
 - **The robot does not drive.** Nothing publishes to `cmd_vel`. It sits
   still and watches; this is everything upstream of the wheels.
+- **No roadmap generation, ablation tooling or test suite.** One
+  roadmap ships prebuilt; the offline machinery stays in the research
+  package.
 
 ## How to run
 
@@ -101,6 +116,20 @@ ros2 launch spite_d turtlebot_demo.launch.py \
 RViz opens showing tracked obstacles, the roadmap, and the planned path.
 Then walk through the space in front of the robot.
 
+**5. Then run it again with spans off.** Same thing, plus
+`use_spans:=false`:
+
+```bash
+ros2 launch spite_d turtlebot_demo.launch.py \
+    depth_topic:=/camera/depth/image_raw \
+    camera_info_topic:=/camera/depth/camera_info \
+    use_spans:=false
+```
+
+Walk the same way for roughly the same length of time. Two runs of a
+minute or two each is plenty. The pair of outputs is the result; either
+run alone says much less.
+
 ## How to read the results
 
 Both nodes print a summary every 5 seconds. **These lines are the
@@ -108,8 +137,11 @@ result** — a minute or two of them is what to send back.
 
 ```
 perception | 14.8 Hz | detect 2.3 ms | tracks now 1 | distinct ids in 5s: 4
-validity | 1.2 Hz | certify 240.1 ms (obb 0.08 / tree 240.0) | edges red 412 gray 1877 of 13675 | replans 3
+validity | 11.4 Hz | spans: 7 rebuilds / 57 obs (88% skipped), 12 expiries | certify 241.6 ms (obb 0.08 / tree 241.5) | edges red 436 gray 1902 of 13675 | replans 3
 ```
+
+With `use_spans:=false` the middle field reads `baseline` instead, and
+the Hz should drop a lot — that drop is the thing being measured.
 
 **Hz** — whether each stage keeps up. Compare against the camera rate
 from `ros2 topic hz`. Perception should roughly match it. Certification
@@ -126,10 +158,25 @@ detector is not firing, which is a plausible outcome and useful to know.
 larger number means the tracker is losing and re-acquiring them. A known
 weakness; this measures how bad it is on real data.
 
+**spans: N rebuilds / M obs (P% skipped), E expiries** — the
+contribution, in one field. Each frame every tracked obstacle is one
+"obs". A rebuild is the expensive path: predict, build the inflated
+geometry, re-query the roadmap trees. Everything else was absorbed by a
+conformance check costing a handful of comparisons. So **P% is how much
+certification work the spans avoided**.
+
+A high P with the path still rerouting sensibly is the result we want. A
+low P means real walking violates the frozen predictions too often for
+spans to pay off, which is equally worth knowing and is the main risk
+this run is testing. Expiries are slices of a span lapsing as time
+passes — cheap healing, no geometry involved.
+
 **certify ms (obb / tree)** — time to recertify the roadmap, split
 between building the obstacle's geometry and querying the roadmap. In
 simulation the tree query is essentially all of it, and confirming that
-on hardware is one of the goals.
+on hardware is one of the goals. Note this is time *per rebuild*, not
+per frame, so it should be roughly the same in both runs — spans make it
+happen less often, not faster.
 
 **edges red / gray** — how much of the roadmap the obstacle blocks. Red
 is provably blocked, gray is undecided. One person reddening most of the
@@ -144,7 +191,8 @@ Use `report_period_s:=2.0` if 5 seconds is too coarse.
 Even a failure is a useful result — this is the first time any of it has
 touched real hardware.
 
-1. **The summary lines** from both terminals.
+1. **The summary lines** from both terminals, **for both runs** —
+   spans on and spans off, labelled which is which.
 2. **A rosbag**, if you can. This is what lets everything be replayed
    offline without the robot:
    ```bash
@@ -154,7 +202,9 @@ touched real hardware.
    ```
 3. A screen recording or photo of RViz.
 4. Roughly what you did — where you stood, how you walked, how far from
-   the camera, how many people were in view.
+   the camera, how many people were in view. If the two runs were
+   noticeably different walks, say so; it affects how comparable the
+   numbers are.
 
 If something does not work, the node terminals plus which of the four
 stages went quiet is usually enough to pin it down.

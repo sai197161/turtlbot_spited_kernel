@@ -7,9 +7,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # ---------------------------------------------------------------------------
 # A trimmed build of SPITE-D for running on a real robot.
 #
-# Compared with the research package this drops the roadmap builders, the
-# ablation demo, the span module and the test suite -- none of which the
-# live pipeline uses. What remains is perception, prediction,
+# Compared with the research package this drops the roadmap builders,
+# the ablation demo and the test suite -- none of which the live
+# pipeline uses. What remains is perception, prediction, spans,
 # certification, replanning and the three ROS nodes.
 #
 # Consequence: OMPL is not needed, because roadmaps are not generated
@@ -59,6 +59,16 @@ target_link_libraries(spite_d_planner PUBLIC spite_d_core)
 add_library(spite_d_validity src/spite/validity_server.cpp)
 target_link_libraries(spite_d_validity PUBLIC spite_d_core open_spite)
 
+# The research contribution: spans freeze a prediction and its
+# certification geometry, so a conforming obstacle costs a conformance
+# check instead of a tree query. validity_node switches between this and
+# the every-frame baseline on the `use_spans` parameter.
+add_library(spite_d_dynamic_map
+  src/trajectory/span.cpp
+  src/trajectory/span_pipeline.cpp)
+target_link_libraries(spite_d_dynamic_map
+  PUBLIC spite_d_core spite_d_trajectory spite_d_validity)
+
 # ---------------------------------------------------------------------------
 # ROS interfaces and nodes
 # ---------------------------------------------------------------------------
@@ -97,7 +107,9 @@ target_link_libraries(prediction_node PRIVATE
 
 add_executable(validity_node src/nodes/validity_node.cpp)
 target_link_libraries(validity_node PRIVATE
+  spite_d_dynamic_map
   spite_d_validity
+  spite_d_trajectory
   spite_d_planner
   "${cpp_typesupport_target}"
   rclcpp::rclcpp
@@ -115,7 +127,8 @@ install(TARGETS perception_node prediction_node validity_node
 # Without this the nodes link but fail to start.
 install(TARGETS
           spite_d_perception spite_d_trajectory spite_d_planner
-          spite_d_validity open_spite open_spite_gdiam
+          spite_d_validity spite_d_dynamic_map
+          open_spite open_spite_gdiam
         ARCHIVE DESTINATION lib
         LIBRARY DESTINATION lib
         RUNTIME DESTINATION bin)
