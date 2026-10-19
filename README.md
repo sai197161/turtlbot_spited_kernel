@@ -30,7 +30,7 @@ jumps to a different route.
 
 ```bash
 mkdir -p ~/spited_ws/src && cd ~/spited_ws/src
-git clone --recursive <REPO URL>
+git clone --recursive https://github.com/sai197161/turtlbot_spited_kernel.git
 cd ~/spited_ws
 source /opt/ros/jazzy/setup.bash
 colcon build --packages-select spite_d
@@ -40,7 +40,7 @@ source install/setup.bash
 If it complains that open-spite is missing, the `--recursive` didn't take:
 
 ```bash
-cd ~/spited_ws/src/<repo> && git submodule update --init --recursive
+cd ~/spited_ws/src/turtlbot_spited_kernel && git submodule update --init --recursive
 ```
 
 Dependencies, if the build complains about missing headers:
